@@ -13,17 +13,13 @@ function extractHostName(longNodeName) {
   return longNodeName.split('@')[1];
 }
 
-function anyItem(arr) {
-  return arr[_.random(0, arr.length - 1)];
-}
-
-function selectNode(hosts, queueInfoList, nodeInfoList, type) {
+function selectNode(hosts, queueInfoList, nodeInfoList, type, shouldReturnArray) {
   if (_.isEmpty(nodeInfoList)) {
     // Nothing from API, connects to a random node
-    return (anyItem(hosts));
+    return (_.sample(hosts));
   } else if (_.isEmpty(queueInfoList)) {
     let nodeNames = _.uniq(_.map(nodeInfoList, extractHostName));
-    return (anyItem(nodeNames));
+    return (_.sample(nodeNames));
   } else {
     // List of all alive nodes
     // nodesCount example: ['rabbit@rabbit1', 'rabbit@rabbit2', 'rabbit@rabbit3']
@@ -51,10 +47,16 @@ function selectNode(hosts, queueInfoList, nodeInfoList, type) {
     let queueCountArr = _.map(queueCount, (count, name) => {
       return { name, count };
     });
-    let leastConnectedNode = _.sortBy(queueCountArr, 'count')[0].name;
 
-    let leastConnectedNodeName = extractHostName(leastConnectedNode);
-    return leastConnectedNodeName;
+    let nodesSortedByPrority = _.sortBy(queueCountArr, 'count');
+    let result;
+    if (shouldReturnArray) {
+      result = _.map(nodesSortedByPrority, node => extractHostName(node.name));
+    } else {
+      let leastConnectedNode = nodesSortedByPrority[0].name;
+      result = extractHostName(leastConnectedNode);
+    }
+    return result;
   }
 }
 
@@ -81,10 +83,10 @@ function callNodesApi(host, cb) {
   callApi(url, host, cb);
 }
 
-function getQueueAndNodeInfo(configHosts, type, onceSuccessCb, failureCb) {
+function getQueueAndNodeInfo(configHosts, type, onceSuccessCb, failureCb, shouldReturnArray) {
   storage.init().then(() => {
     storage.getItem('hosts').then((savedHosts) => {
-      let mergedHosts = _.uniq(_.concat(savedHosts, configHosts));
+      let mergedHosts = _.union(savedHosts, configHosts);
       async.some(mergedHosts, (host, someCallback) => {
         async.waterfall([
           (callback) => {
@@ -94,7 +96,7 @@ function getQueueAndNodeInfo(configHosts, type, onceSuccessCb, failureCb) {
             callNodesApi(host, (err, nodeInfoList) => callback(err, queueInfoList, nodeInfoList));
           },
           (queueInfoList, nodeInfoList, callback) => {
-            let selectedHost = selectNode(configHosts, queueInfoList, nodeInfoList, type);
+            let selectedHost = selectNode(configHosts, queueInfoList, nodeInfoList, type, shouldReturnArray);
             onceSuccessCb(selectedHost);
             callback(null);
           }
@@ -117,8 +119,18 @@ function getQueueAndNodeInfo(configHosts, type, onceSuccessCb, failureCb) {
  *    'publisher': when called from mosca
  *    'subscriber': when called from collector
  * success: connection callback, takes one parameter - hostname of selected node
+ * 
+ * Returns the node that currently have the least connection of the specified type
  */
 module.exports.selectRabbit = function (hosts, type, successCb, failureCb) {
   let onceSuccessCb = _.once(successCb);
-  getQueueAndNodeInfo(hosts, type, onceSuccessCb, failureCb);
+  getQueueAndNodeInfo(hosts, type, onceSuccessCb, failureCb, false);
+};
+
+/**
+ * Returns a of rabbit nodes sorted by connections from few to many
+ */
+module.exports.selectRabbits = function (hosts, type, successCb, failureCb) {
+  let onceSuccessCb = _.once(successCb);
+  getQueueAndNodeInfo(hosts, type, onceSuccessCb, failureCb, true);
 };

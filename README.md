@@ -16,11 +16,19 @@ pnpm i rabbit-helper --save
 
 ```js
 const rabbitHelper = require('rabbit-helper');
-let seedNodes = ['rabbit1', 'rabbit2', 'rabbit3'];
+let seedNodes = ['rabbit1', 'rabbit2'];
+// Will also select rabbit3, 4, 5 etc. if they are up and connected to the cluster at the time
 rabbitHelper.selectRabbit(seedNodes, 'publisher', (selectedNode) => {
   // Do stuff with selectedNode
 });
 rabbitHelper.selectRabbit(seedNodes, 'subscriber', (selectedNode) => {
   // Do stuff with selectedNode
 });
+rabbitHelper.selectRabbits(seedNodes, 'publisher', (selectedNodes) => {
+  // selectedNodes is array of nodes sorted by connection prority (best one first)
+});
 ```
+
+## Assumption
+* Publishers use non-durable queues, connections will be counted by `number of queues`
+* Subscribers use durable queues, connections will be counted by `total number of connection on node - number of non-durable queues`
