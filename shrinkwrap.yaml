@@ -1,5 +1,6 @@
 dependencies:
   async: 2.5.0
+  dotenv: 4.0.0
   lodash: 4.17.4
   node-persist: 2.1.0
   request: 2.83.0
@@ -92,6 +93,11 @@ packages:
       node: '>=0.4.0'
     resolution:
       integrity: sha1-3zrhmayt+31ECqrgsp4icrJOxhk=
+  /dotenv/4.0.0:
+    engines:
+      node: '>=4.6.0'
+    resolution:
+      integrity: sha1-hk7xN5rO1Vzm+V3r7NzhefegzR0=
   /ecc-jsbn/0.1.1:
     dependencies:
       jsbn: 0.1.1
@@ -363,10 +369,10 @@ packages:
     resolution:
       integrity: sha1-OhBcoXBTr1XW4nDB+CiGguGNpAA=
 registry: 'https://registry.npmjs.org/'
-shrinkwrapMinorVersion: 1
 shrinkwrapVersion: 3
 specifiers:
   async: ^2.5.0
+  dotenv: ^4.0.0
   lodash: ^4.17.4
   node-persist: ^2.1.0
   request: ^2.83.0
