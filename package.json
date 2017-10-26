@@ -1,0 +1,31 @@
+{
+  "name": "rabbit-helper",
+  "version": "1.0.0",
+  "description": "RabbitMQ node selection helper",
+  "main": "rabbit-helper.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/thanhphu/rabbit-helper.git"
+  },
+  "keywords": [
+    "rabbitmq",
+    "node",
+    "clustering",
+    "selection"
+  ],
+  "author": "Thanh Phu",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/thanhphu/rabbit-helper/issues"
+  },
+  "homepage": "https://github.com/thanhphu/rabbit-helper#readme",
+  "dependencies": {
+    "async": "^2.5.0",
+    "lodash": "^4.17.4",
+    "node-persist": "^2.1.0",
+    "request": "^2.83.0"
+  }
+}
