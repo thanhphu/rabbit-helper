@@ -13,12 +13,12 @@ function extractHostName(longNodeName) {
   return longNodeName.split('@')[1];
 }
 
-function selectNode(hosts, queueInfoList, nodeInfoList, type, shouldReturnArray) {
+function selectNode(hosts, queueInfoList, nodeInfoList, connectionInfoList, type, shouldReturnArray) {
   if (_.isEmpty(nodeInfoList)) {
     // Nothing from API, connects to a random node
     return (_.sample(hosts));
   } else if (_.isEmpty(queueInfoList)) {
-    let nodeNames = _.uniq(_.map(nodeInfoList, extractHostName));
+    let nodeNames = _.uniq(_.map(nodeInfoList, n => extractHostName(n.name)));
     return (_.sample(nodeNames));
   } else {
     // List of all alive nodes
@@ -28,27 +28,37 @@ function selectNode(hosts, queueInfoList, nodeInfoList, type, shouldReturnArray)
     // Persist list of nodes for next time
     storage.setItem('hosts', _.map(nodeNames, extractHostName));
 
+    let finalCount;
     if (type === 'publisher') {
       // Mosca makes non-durable queues, keep durable queues
       _.remove(queueInfoList, node => node.durable === true);
+      // queueCount example: Object {rabbit@rabbit1: 2, rabbit@rabbit2: 1, rabbit@rabbit3: 3}
+      let queueCount = _.countBy(queueInfoList, node => node.node);
+      // Add nodes with zero queues
+      _.forEach(nodeNames, nodeName => {
+        if (!queueCount[nodeName]) {
+          queueCount[nodeName] = 0;
+        }
+      });
+      finalCount = queueCount;
     } else {
-      // We use durable queues in consumers
-      _.remove(queueInfoList, node => node.durable === false);
+      // Subscriber logic
+      // connectionCount example: Object {rabbit@rabbit1: 2, rabbit@rabbit2: 1, rabbit@rabbit3: 3}
+      let connectionCount = _.countBy(connectionInfoList, node => node.node);  
+      // Add nodes with zero connections
+      _.forEach(nodeNames, nodeName => {
+        if (!connectionCount[nodeName]) {
+          connectionCount[nodeName] = 0;
+        }
+      });
+      finalCount = connectionCount;
     }
-    // queueCount example: Object {rabbit@rabbit1: 2, rabbit@rabbit2: 1, rabbit@rabbit3: 3}
-    let queueCount = _.countBy(queueInfoList, node => node.node);
-    // Add nodes with zero queues
-    _.forEach(nodeNames, nodeName => {
-      if (!queueCount[nodeName]) {
-        queueCount[nodeName] = 0;
-      }
-    });
 
-    let queueCountArr = _.map(queueCount, (count, name) => {
+    let finalCountArr = _.map(finalCount, (count, name) => {
       return { name, count };
     });
 
-    let nodesSortedByPrority = _.sortBy(queueCountArr, 'count');
+    let nodesSortedByPrority = _.sortBy(finalCountArr, 'count');
     let result;
     if (shouldReturnArray) {
       result = _.map(nodesSortedByPrority, node => extractHostName(node.name));
@@ -63,7 +73,13 @@ function selectNode(hosts, queueInfoList, nodeInfoList, type, shouldReturnArray)
 function callApi(url, host, cb) {
   request({
     url: url,
-    json: true
+    json: true,
+    auth: {
+      user: rabbitUsername,
+      pass: rabbitPassword,
+      sendImmediately: false
+    },
+    timeout: 3000 // 3 secs
   }, function (error, response, body) {
     if (!error && response.statusCode === 200) {
       cb(null, body);
@@ -74,29 +90,43 @@ function callApi(url, host, cb) {
 }
 
 function callQueueApi(host, cb) {
-  const url = `http://${rabbitUsername}:${rabbitPassword}@${host}:15672/api/queues`;
+  const url = `http://${host}:15672/api/queues`;
   callApi(url, host, cb);
 }
 
 function callNodesApi(host, cb) {
-  const url = `http://${rabbitUsername}:${rabbitPassword}@${host}:15672/api/nodes`;
+  const url = `http://${host}:15672/api/nodes`;
+  callApi(url, host, cb);
+}
+
+function callConnectionsApi(host, cb) {
+  const url = `http://${host}:15672/api/connections`;
   callApi(url, host, cb);
 }
 
 function getQueueAndNodeInfo(configHosts, type, onceSuccessCb, failureCb, shouldReturnArray) {
+  // console.log('Loading persistence');
   storage.init().then(() => {
     storage.getItem('hosts').then((savedHosts) => {
+      // console.log('Persistence loaded, savedHosts:', savedHosts);
       let mergedHosts = _.union(savedHosts, configHosts);
-      async.some(mergedHosts, (host, someCallback) => {
+      async.someLimit(mergedHosts, 1, (host, someCallback) => {
         async.waterfall([
           (callback) => {
+            // console.log('querying queue, host', host);
             callQueueApi(host, (err, queueInfoList) => callback(err, queueInfoList));
           },
           (queueInfoList, callback) => {
+            // console.log('querying nodes');
             callNodesApi(host, (err, nodeInfoList) => callback(err, queueInfoList, nodeInfoList));
           },
           (queueInfoList, nodeInfoList, callback) => {
-            let selectedHost = selectNode(configHosts, queueInfoList, nodeInfoList, type, shouldReturnArray);
+            // console.log('querying connections');
+            callConnectionsApi(host, (err, connectionInfoList) => callback(err, queueInfoList, nodeInfoList, connectionInfoList));
+          },
+          (queueInfoList, nodeInfoList, connectionInfoList, callback) => {
+            let selectedHost = selectNode(configHosts, queueInfoList, nodeInfoList, connectionInfoList, type, shouldReturnArray);
+            // console.log('Node selected:', selectedHost);
             onceSuccessCb(selectedHost);
             callback(null);
           }
