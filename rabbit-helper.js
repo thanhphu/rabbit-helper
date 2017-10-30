@@ -8,6 +8,7 @@ const storage = require('node-persist');
 
 const rabbitUsername = process.env.RABBIT_USERNAME || 'guest';
 const rabbitPassword = process.env.RABBIT_PASSWORD || 'guest';
+const apiPort = process.env.RABBIT_API_PORT || 15672;
 
 function extractHostName(longNodeName) {
   return longNodeName.split('@')[1];
@@ -90,17 +91,17 @@ function callApi(url, host, cb) {
 }
 
 function callQueueApi(host, cb) {
-  const url = `http://${host}:15672/api/queues`;
+  const url = `http://${host}:${apiPort}/api/queues`;
   callApi(url, host, cb);
 }
 
 function callNodesApi(host, cb) {
-  const url = `http://${host}:15672/api/nodes`;
+  const url = `http://${host}:${apiPort}/api/nodes`;
   callApi(url, host, cb);
 }
 
 function callConnectionsApi(host, cb) {
-  const url = `http://${host}:15672/api/connections`;
+  const url = `http://${host}:${apiPort}/api/connections`;
   callApi(url, host, cb);
 }
 
@@ -126,6 +127,10 @@ function getQueueAndNodeInfo(configHosts, type, onceSuccessCb, failureCb, should
           },
           (queueInfoList, nodeInfoList, connectionInfoList, callback) => {
             let selectedHost = selectNode(configHosts, queueInfoList, nodeInfoList, connectionInfoList, type, shouldReturnArray);
+            if (shouldReturnArray) {
+              // Convert anything to array
+              selectedHost = [].concat(selectedHost);
+            }
             // console.log('Node selected:', selectedHost);
             onceSuccessCb(selectedHost);
             callback(null);
