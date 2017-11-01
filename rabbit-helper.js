@@ -45,7 +45,7 @@ function selectNode(hosts, queueInfoList, nodeInfoList, connectionInfoList, type
     } else {
       // Subscriber logic
       // connectionCount example: Object {rabbit@rabbit1: 2, rabbit@rabbit2: 1, rabbit@rabbit3: 3}
-      let connectionCount = _.countBy(connectionInfoList, node => node.node);  
+      let connectionCount = _.countBy(connectionInfoList, node => node.node);
       // Add nodes with zero connections
       _.forEach(nodeNames, nodeName => {
         if (!connectionCount[nodeName]) {
@@ -108,44 +108,42 @@ function callConnectionsApi(host, cb) {
 function getQueueAndNodeInfo(configHosts, type, onceSuccessCb, failureCb, shouldReturnArray) {
   // console.log('Loading persistence');
   storage.init().then(() => {
-    storage.getItem('hosts').then((savedHosts) => {
-      // console.log('Persistence loaded, savedHosts:', savedHosts);
-      let mergedHosts = _.union(savedHosts, configHosts);
-      async.someLimit(mergedHosts, 1, (host, someCallback) => {
-        async.waterfall([
-          (callback) => {
-            // console.log('querying queue, host', host);
-            callQueueApi(host, (err, queueInfoList) => callback(err, queueInfoList));
-          },
-          (queueInfoList, callback) => {
-            // console.log('querying nodes');
-            callNodesApi(host, (err, nodeInfoList) => callback(err, queueInfoList, nodeInfoList));
-          },
-          (queueInfoList, nodeInfoList, callback) => {
-            // console.log('querying connections');
-            callConnectionsApi(host, (err, connectionInfoList) => callback(err, queueInfoList, nodeInfoList, connectionInfoList));
-          },
-          (queueInfoList, nodeInfoList, connectionInfoList, callback) => {
-            let selectedHost = selectNode(configHosts, queueInfoList, nodeInfoList, connectionInfoList, type, shouldReturnArray);
-            if (shouldReturnArray) {
-              // Convert anything to array
-              selectedHost = [].concat(selectedHost);
-            }
-            // console.log('Node selected:', selectedHost);
-            onceSuccessCb(selectedHost);
-            callback(null);
+    let savedHosts = storage.getItemSync('hosts');
+    // console.log('Persistence loaded, savedHosts:', savedHosts);
+    let mergedHosts = _.union(savedHosts, configHosts);
+    async.some(mergedHosts, (host, someCallback) => {
+      async.waterfall([
+        (callback) => {
+          // console.log('querying queue, host', host);
+          callQueueApi(host, (err, queueInfoList) => callback(err, queueInfoList));
+        },
+        (queueInfoList, callback) => {
+          // console.log('querying nodes');
+          callNodesApi(host, (err, nodeInfoList) => callback(err, queueInfoList, nodeInfoList));
+        },
+        (queueInfoList, nodeInfoList, callback) => {
+          // console.log('querying connections');
+          callConnectionsApi(host, (err, connectionInfoList) => callback(err, queueInfoList, nodeInfoList, connectionInfoList));
+        },
+        (queueInfoList, nodeInfoList, connectionInfoList, callback) => {
+          let selectedHost = selectNode(configHosts, queueInfoList, nodeInfoList, connectionInfoList, type, shouldReturnArray);
+          if (shouldReturnArray) {
+            // Convert anything to array
+            selectedHost = [].concat(selectedHost);
           }
-        ], (err) => {
-          someCallback(null, !err);
-        });
-      }, (err, result) => {
-        if ((err || !result) && failureCb) {
-          failureCb(err);
+          // console.log('Node selected:', selectedHost);
+          onceSuccessCb(selectedHost);
+          callback(null);
         }
-      });    
+      ], (err) => {
+        someCallback(null, !err);
+      });
+    }, (err, result) => {
+      if ((err || !result) && failureCb) {
+        failureCb(err);
+      }
     });
   });
-  
 }
 
 /**
